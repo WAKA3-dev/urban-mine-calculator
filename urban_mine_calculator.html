@@ -452,6 +452,7 @@ async function callAPI(messages,useSearch=false,model='haiku',forPrice=false){
   });
   if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${res.status}`);}
   const data=await res.json();
+  if(forPrice)console.log('【相場APIraw】stop_reason:',data.stop_reason,'content types:',data.content.map(i=>i.type).join(','));
   // stop_reason が tool_use の場合、追加ターンが必要（ウェブ検索完了後の最終回答を取得）
   if(data.stop_reason==='tool_use'&&useSearch){
     const toolUseBlock=data.content.find(i=>i.type==='tool_use');
@@ -540,6 +541,7 @@ JSONのみ返すこと`;
   // 1st: Haiku＋ウェブ検索（約1〜2円）
   try{
     const t1=await callAPI([{role:"user",content:prompt1}],true,'haiku',true);
+    console.log('【相場APIレスポンス全文】',JSON.stringify(t1).substring(0,500));
     const p=parseJSON(t1);
     if(p.jpy_per_g){
       Object.assign(metalPrices,p.jpy_per_g);
