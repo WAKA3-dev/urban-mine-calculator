@@ -486,7 +486,7 @@ function setPS(id,state,text){
 async function fetchMetalPrices(){
   if(!API_KEY)return;
   const today=new Date().toLocaleDateString('ja-JP');
-  const fb={gold:11500,silver:115,palladium:3200,platinum:4300,copper:1.12,aluminum:0.19,iron:0.05,stainless:0.08,lead:0.23,indium:18,cobalt:3.5,lithium:2.5,tin:1.3,tantalum:25};
+  const fb={gold:26500,silver:430,palladium:3800,platinum:11300,copper:1.40,aluminum:0.22,iron:0.06,stainless:0.10,lead:0.25,indium:18,cobalt:3.5,lithium:2.5,tin:1.4,tantalum:25};
 
   // キャッシュ確認（当日分があれば再取得しない）
   try{
@@ -985,10 +985,8 @@ async function sendToSheet(row){
       values:JSON.stringify(values)
     });
     const url=`${GAS_URL}?${params.toString()}`;
-    // XHRでno-cors相当のリクエスト
-    const xhr=new XMLHttpRequest();
-    xhr.open('GET',url,true);
-    xhr.send();
+    // no-corsモード：レスポンスは読めないがリクエストは届く
+    fetch(url,{method:'GET',mode:'no-cors'}).catch(()=>{});
     console.log('スプレッドシートに送信しました',url.length,'文字');
   }catch(e){
     console.warn('スプレッドシート追記失敗:',e.message);
