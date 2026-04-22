@@ -104,6 +104,20 @@ input:focus,select:focus{border-color:var(--acc)}
 .export-btn.copied{background:var(--grn);border-color:var(--grn)}
 .hist-sec{background:var(--sur);border:1px solid var(--bdr);border-radius:var(--r);padding:16px 20px;margin-bottom:14px;display:none}
 .hist-sec.show{display:block}
+.price-panel{background:var(--sur);border:1px solid var(--bdr);border-radius:var(--r);padding:14px 16px;margin-bottom:14px}
+.price-panel-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.price-panel-title{font-size:11px;font-weight:700;color:var(--tx2);letter-spacing:.06em}
+.price-status{font-size:11px;padding:2px 10px;border-radius:20px;font-weight:500}
+.price-status.ok{background:#e8f5ee;color:#2a7a4b}
+.price-status.warn{background:#fdf3dc;color:#7a5a10}
+.price-status.loading{background:#e6f1fb;color:#185FA5}
+.price-cats{display:flex;gap:8px;flex-wrap:wrap}
+.price-cat{flex:1;min-width:120px;background:var(--sur2);border-radius:var(--rs);padding:8px 10px}
+.price-cat-label{font-size:10px;font-weight:700;color:var(--tx2);margin-bottom:6px}
+.price-items{display:flex;flex-direction:column;gap:3px}
+.price-item{display:flex;justify-content:space-between;font-size:11px}
+.price-item-name{color:var(--tx2)}
+.price-item-val{font-weight:500;color:var(--tx)}
 .hist-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
 .hist-title{font-size:11px;font-weight:700;color:var(--tx2);letter-spacing:.06em;text-transform:uppercase}
 .hist-count{font-size:12px;color:var(--tx2);background:var(--sur2);padding:2px 10px;border-radius:20px}
@@ -327,6 +341,28 @@ input:focus,select:focus{border-color:var(--acc)}
     <button class="reset-btn" onclick="resetAll()">↺ 最初からやり直す（入力内容をリセット）</button>
   </div>
 
+  <!-- 相場価格パネル -->
+  <div class="price-panel" id="pricePanel" style="display:none">
+    <div class="price-panel-header">
+      <div class="price-panel-title">金属相場（円/g）</div>
+      <span class="price-status loading" id="priceStatus">取得中...</span>
+    </div>
+    <div class="price-cats">
+      <div class="price-cat">
+        <div class="price-cat-label">貴金属</div>
+        <div class="price-items" id="priceNoble"></div>
+      </div>
+      <div class="price-cat">
+        <div class="price-cat-label">スクラップ金属</div>
+        <div class="price-items" id="priceScrap"></div>
+      </div>
+      <div class="price-cat">
+        <div class="price-cat-label">レアメタル</div>
+        <div class="price-items" id="priceRare"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- 査定履歴 -->
   <div class="hist-sec" id="histSec">
     <div class="hist-header">
@@ -452,7 +488,6 @@ async function callAPI(messages,useSearch=false,model='haiku',forPrice=false){
   });
   if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${res.status}`);}
   const data=await res.json();
-  if(forPrice)console.log('【相場APIraw】stop_reason:',data.stop_reason,'content types:',data.content.map(i=>i.type).join(','));
   // stop_reason が tool_use の場合、追加ターンが必要（ウェブ検索完了後の最終回答を取得）
   if(data.stop_reason==='tool_use'&&useSearch){
     const toolUseBlock=data.content.find(i=>i.type==='tool_use');
@@ -529,9 +564,11 @@ async function fetchMetalPrices(){
 
   showPriceBadge(today,'取得中...',true);
 
-  const prompt1=`田中貴金属のサイトで本日${today}の金・銀・プラチナ買取価格を検索し、以下のJSON形式で返せ。説明文禁止。
+  const prompt1=`金相場.jp または precious.jp で本日${today}の金属買取価格（円/g）を検索して取得し、以下のJSON形式のみで返せ。説明文・謝罪文禁止。
 {"jpy_per_g":{"gold":26500,"silver":430,"palladium":3800,"platinum":11300,"copper":1.40,"aluminum":0.22,"iron":0.06,"stainless":0.10,"lead":0.25,"indium":18,"cobalt":3.5,"lithium":2.5,"tin":1.4,"tantalum":25},"updated":"${today}"}
-・全項目必ず数値（nullなし）・JSONのみ・他の文字列一切不要`;
+・金・銀・パラジウム・白金は必ずリアルタイム価格を取得すること
+・スクラップ系（銅・アルミ・鉄等）は直近の概算値でよい
+・全項目必ず数値（nullなし）・JSONのみ・他の文字一切不要`;
 
   const prompt2=`本日${today}の金属相場（円/g）を学習データから推定してください。
 JSON形式のみで回答:
@@ -541,8 +578,23 @@ JSONのみ返すこと`;
   // 1st: Haiku＋ウェブ検索（約1〜2円）
   try{
     const t1=await callAPI([{role:"user",content:prompt1}],true,'haiku',true);
-    console.log('【相場APIレスポンス全文】',JSON.stringify(t1).substring(0,500));
-    const p=parseJSON(t1);
+    let p=null;
+    try{p=parseJSON(t1);}catch(e){
+      // JSONパースに失敗した場合、テキストから金価格を正規表現で抽出して再構成
+      const goldMatch=t1.match(/金[^\d]{0,10}([\d,]+)円\/g/);
+      const silverMatch=t1.match(/銀[^\d]{0,10}([\d,]+)円\/g/);
+      const platMatch=t1.match(/プラチナ[^\d]{0,10}([\d,]+)円\/g/);
+      if(goldMatch){
+        p={jpy_per_g:{
+          gold:parseInt(goldMatch[1].replace(/,/g,'')),
+          silver:silverMatch?parseInt(silverMatch[1].replace(/,/g,'')):fb.silver,
+          platinum:platMatch?parseInt(platMatch[1].replace(/,/g,'')):fb.platinum,
+          palladium:fb.palladium,copper:fb.copper,aluminum:fb.aluminum,
+          iron:fb.iron,stainless:fb.stainless,lead:fb.lead,indium:fb.indium,
+          cobalt:fb.cobalt,lithium:fb.lithium,tin:fb.tin,tantalum:fb.tantalum
+        }};
+      }
+    }
     if(p.jpy_per_g){
       Object.assign(metalPrices,p.jpy_per_g);
       localStorage.setItem('umk_prices',JSON.stringify({date:today,prices:{...metalPrices}}));
@@ -590,6 +642,28 @@ function showPriceBadge(date,status,loading=false,warn=false){
     badge.textContent=`相場 ${date} ${status}`;
     setTimeout(()=>{if(badge)badge.style.opacity='0.6';},5000);
   }
+  // 価格パネルも更新
+  updatePricePanel(status,loading,warn);
+}
+
+function updatePricePanel(status,loading,warn){
+  const panel=document.getElementById('pricePanel');
+  const st=document.getElementById('priceStatus');
+  if(!panel)return;
+  panel.style.display='block';
+  if(loading){
+    st.className='price-status loading';st.textContent='取得中...';return;
+  }
+  st.className=warn?'price-status warn':'price-status ok';
+  st.textContent=status;
+  const noble=[['金','gold'],['銀','silver'],['パラジウム','palladium'],['白金','platinum']];
+  const scrap=[['銅','copper'],['アルミ','aluminum'],['鉄','iron'],['ステンレス','stainless'],['鉛','lead']];
+  const rare=[['インジウム','indium'],['コバルト','cobalt'],['リチウム','lithium'],['錫','tin'],['タンタル','tantalum']];
+  const fmt=(k)=>metalPrices[k]?metalPrices[k].toLocaleString()+'円':'—';
+  const rows=(items)=>items.map(([n,k])=>`<div class="price-item"><span class="price-item-name">${n}</span><span class="price-item-val">${fmt(k)}</span></div>`).join('');
+  document.getElementById('priceNoble').innerHTML=rows(noble);
+  document.getElementById('priceScrap').innerHTML=rows(scrap);
+  document.getElementById('priceRare').innerHTML=rows(rare);
 }
 
 // モード切替
