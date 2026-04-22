@@ -152,7 +152,7 @@ input:focus,select:focus{border-color:var(--acc)}
 <body>
 <header>
   <div><div class="h-title">都市鉱山査定計算機</div><div class="h-sub">Urban Mine Valuation Tool</div></div>
-  <div class="h-badge">v2.1</div>
+  <div class="h-badge">v2.2</div>
 </header>
 
 <div id="keyBanner">
@@ -170,7 +170,11 @@ input:focus,select:focus{border-color:var(--acc)}
     <div class="price-panel" id="pricePanel">
       <div class="price-panel-header">
         <div class="price-panel-title">金属相場（円/g）</div>
-        <span class="price-status loading" id="priceStatus">取得中...</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="price-status loading" id="priceStatus">取得中...</span>
+          <button id="refreshPriceBtn" title="相場を強制再取得（キャッシュを無視）" onclick="forceRefreshPrices()" style="padding:3px 10px;font-size:11px;background:var(--sur);border:1px solid var(--bdr2);border-radius:20px;cursor:pointer;color:var(--tx2);font-family:'Noto Sans JP',sans-serif">🔄 更新</button>
+          <button id="manualPriceBtn" title="相場を手動入力" onclick="openManualPriceDialog()" style="padding:3px 10px;font-size:11px;background:var(--sur);border:1px solid var(--bdr2);border-radius:20px;cursor:pointer;color:var(--tx2);font-family:'Noto Sans JP',sans-serif">✏️ 手入力</button>
+        </div>
       </div>
       <div class="price-cats">
         <div class="price-cat">
@@ -384,7 +388,24 @@ input:focus,select:focus{border-color:var(--acc)}
       <button class="hist-btn dl" onclick="downloadAllCSV()">📥 全件CSVダウンロード</button>
       <button class="hist-btn clear" onclick="clearHistory()">🗑 履歴を消去</button>
     </div>
+  </div>  <!-- 相場手動入力モーダル -->
+  <div id="manualPriceModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;padding:16px">
+    <div style="background:var(--sur);border-radius:var(--r);padding:20px;max-width:560px;width:100%;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="font-size:14px;font-weight:700">金属相場を手動入力（円/g）</div>
+        <button onclick="closeManualPriceDialog()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--tx2)">×</button>
+      </div>
+      <div style="font-size:11px;color:var(--tx2);margin-bottom:12px;padding:8px 10px;background:var(--amb-bg);border-radius:var(--rs);border:1px solid #e8d090">
+        ⚠ API経由の自動取得が失敗した際の予備手段です。<a href="https://www.ichibankin.com/kakaku/" target="_blank" rel="noopener" style="color:var(--acc)">一番金</a> や <a href="https://gold.tanaka.co.jp/commodity/souba/" target="_blank" rel="noopener" style="color:var(--acc)">田中貴金属</a> 等で本日の価格を確認し入力してください。
+      </div>
+      <div id="manualPriceInputs" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" style="flex:1" onclick="saveManualPrices()">💾 この価格で保存</button>
+        <button class="btn" onclick="closeManualPriceDialog()">キャンセル</button>
+      </div>
+    </div>
   </div>
+
 </main>
 
 <script>
@@ -545,83 +566,236 @@ function setPS(id,state,text){
   el.innerHTML=`${icon}<span>${text||document.getElementById(id+'t')?.textContent||''}</span>`;
 }
 
-// 金属相場取得（1日1回キャッシュ・3段階フォールバック）
-async function fetchMetalPrices(){
+// ─── 相場価格の妥当性検証 ───────────────────────
+// 2026年時点の妥当な価格レンジ（円/g）
+const PRICE_RANGES = {
+  gold:     [18000, 50000], // 金: 約26,500±
+  silver:   [250,   1500],  // 銀: 約430±
+  palladium:[1500,  15000], // パラジウム: 約3,800±
+  platinum: [4000,  20000], // 白金: 約11,300±
+  copper:   [0.5,   5],
+  aluminum: [0.1,   1],
+  iron:     [0.02,  0.3],
+  stainless:[0.05,  0.5],
+  lead:     [0.1,   1],
+  indium:   [5,     100],
+  cobalt:   [1,     30],
+  lithium:  [0.5,   30],
+  tin:      [0.5,   10],
+  tantalum: [5,     100]
+};
+const CRITICAL_METALS = ['gold','silver','palladium','platinum'];
+
+function validatePrices(prices){
+  if(!prices||typeof prices!=='object')return {valid:{},issues:['データ無効'],isUsable:false,criticalOk:0};
+  const valid={}; const issues=[]; let criticalOk=0;
+  for(const[k,v]of Object.entries(prices)){
+    if(!PRICE_RANGES[k])continue;
+    const n=typeof v==='string'?parseFloat(v.replace(/,/g,'')):v;
+    if(typeof n!=='number'||isNaN(n)||n<=0){
+      issues.push(`${k}: 無効値(${v})`);continue;
+    }
+    const[min,max]=PRICE_RANGES[k];
+    if(n<min||n>max){
+      issues.push(`${k}: ${n}円/g が範囲外(${min}〜${max})`);continue;
+    }
+    valid[k]=n;
+    if(CRITICAL_METALS.includes(k))criticalOk++;
+  }
+  // 貴金属4種のうち3種以上が正常範囲ならデータ利用可とする
+  return {valid,issues,isUsable:criticalOk>=3,criticalOk};
+}
+
+// 金属相場取得（1日1回キャッシュ・バリデーション付き・3段階フォールバック）
+async function fetchMetalPrices(forceFresh=false){
   if(!API_KEY)return;
   const today=new Date().toLocaleDateString('ja-JP');
   const fb={gold:26500,silver:430,palladium:3800,platinum:11300,copper:1.40,aluminum:0.22,iron:0.06,stainless:0.10,lead:0.25,indium:18,cobalt:3.5,lithium:2.5,tin:1.4,tantalum:25};
 
-  // キャッシュ確認（当日分があれば再取得しない）
-  try{
-    const cached=JSON.parse(localStorage.getItem('umk_prices')||'null');
-    if(cached&&cached.date===today&&cached.prices){
-      Object.assign(metalPrices,cached.prices);
-      showPriceBadge(today,'キャッシュ');
-      for(const[k,v]of Object.entries(fb)){if(!metalPrices[k])metalPrices[k]=v;}
-      return;
-    }
-  }catch(e){}
+  // キャッシュ確認（当日分があり、かつ妥当性が担保されていれば再取得しない）
+  if(!forceFresh){
+    try{
+      const cached=JSON.parse(localStorage.getItem('umk_prices')||'null');
+      if(cached&&cached.date===today&&cached.prices){
+        const v=validatePrices(cached.prices);
+        if(v.isUsable){
+          // キャッシュが妥当な場合のみ採用
+          Object.keys(metalPrices).forEach(k=>metalPrices[k]=null);
+          Object.assign(metalPrices,v.valid);
+          // 欠けている金属はフォールバック
+          for(const[k,val]of Object.entries(fb)){if(!metalPrices[k])metalPrices[k]=val;}
+          showPriceBadge(today,cached.source?'キャッシュ ('+cached.source+')':'キャッシュ');
+          return;
+        }else{
+          console.warn('キャッシュが異常値を含むため破棄:',v.issues);
+          localStorage.removeItem('umk_prices');
+        }
+      }
+    }catch(e){}
+  }else{
+    // 強制更新時はキャッシュを消す
+    localStorage.removeItem('umk_prices');
+  }
 
   showPriceBadge(today,'取得中...',true);
 
-  const prompt1=`金相場.jp または precious.jp で本日${today}の金属買取価格（円/g）を検索して取得し、以下のJSON形式のみで返せ。説明文・謝罪文禁止。
-{"jpy_per_g":{"gold":26500,"silver":430,"palladium":3800,"platinum":11300,"copper":1.40,"aluminum":0.22,"iron":0.06,"stainless":0.10,"lead":0.25,"indium":18,"cobalt":3.5,"lithium":2.5,"tin":1.4,"tantalum":25},"updated":"${today}"}
-・金・銀・パラジウム・白金は必ずリアルタイム価格を取得すること
-・スクラップ系（銅・アルミ・鉄等）は直近の概算値でよい
-・全項目必ず数値（nullなし）・JSONのみ・他の文字一切不要`;
+  const prompt1=`本日（${today}）の日本国内の金属相場（円/g）をウェブ検索で取得してください。
 
-  const prompt2=`2026年4月現在の金属相場（円/g）を推定してください。
-参考：金は現在約26,000〜27,000円/g、銀は約430円/g、プラチナは約11,000円/g付近。
+【検索対象サイト（優先順）】
+1. 田中貴金属工業 https://gold.tanaka.co.jp/commodity/souba/
+2. 一番金 https://www.ichibankin.com/kakaku/
+3. 住友金属鉱山
+4. 金相場.jp, precious.jp
+
+【重要な注意事項】
+・金・銀・パラジウム・白金は「小売価格」または「買取価格」の円/g（グラム単価）を取得すること
+・トロイオンス（oz）ではなくグラム（g）の価格を使うこと
+・1トロイオンス=31.1034768g なので、oz価格しか無い場合は ÷31.1 する
+・「変動」「前日比」等の差額ではなく絶対価格を取得すること
+・2026年4月現在の参考値: 金≈26,500円/g, 銀≈430円/g, パラジウム≈3,800円/g, 白金≈11,300円/g
+
+【出力形式】JSONのみ（説明文・マークダウン禁止）
+{"jpy_per_g":{"gold":26500,"silver":430,"palladium":3800,"platinum":11300,"copper":1.40,"aluminum":0.22,"iron":0.06,"stainless":0.10,"lead":0.25,"indium":18,"cobalt":3.5,"lithium":2.5,"tin":1.4,"tantalum":25},"source":"tanaka.co.jp","updated":"${today}"}
+
+全項目必ず数値・JSONのみ返すこと。`;
+
+  const prompt2=`2026年4月現在の日本国内の金属相場（円/g）を学習データから推定してください。
+【参考値】
+・金(gold): 26,000〜27,000円/g
+・銀(silver): 400〜450円/g
+・パラジウム(palladium): 3,500〜4,000円/g
+・白金(platinum): 11,000〜12,000円/g
+・銅(copper): 1.3〜1.5円/g
+※必ずこの範囲を基準にすること。大きく外れる値は出力禁止。
+
 JSON形式のみで回答:
-{"jpy_per_g":{"gold":26500,"silver":430,"palladium":3800,"platinum":11300,"copper":1.40,"aluminum":0.22,"iron":0.06,"stainless":0.10,"lead":0.25,"indium":18,"cobalt":3.5,"lithium":2.5,"tin":1.4,"tantalum":25},"updated":"${today}"}
-JSONのみ返すこと`;
+{"jpy_per_g":{"gold":26500,"silver":430,"palladium":3800,"platinum":11300,"copper":1.40,"aluminum":0.22,"iron":0.06,"stainless":0.10,"lead":0.25,"indium":18,"cobalt":3.5,"lithium":2.5,"tin":1.4,"tantalum":25},"source":"学習データ推定","updated":"${today}"}
+JSONのみ。他の文字一切不要。`;
 
-  // 1st: Haiku＋ウェブ検索（約1〜2円）
-  try{
-    const t1=await callAPI([{role:"user",content:prompt1}],true,'haiku',true);
-    let p=null;
-    try{p=parseJSON(t1);}catch(e){
-      // JSONパースに失敗した場合、テキストから金価格を正規表現で抽出して再構成
-      const goldMatch=t1.match(/金[^\d]{0,10}([\d,]+)円\/g/);
-      const silverMatch=t1.match(/銀[^\d]{0,10}([\d,]+)円\/g/);
-      const platMatch=t1.match(/プラチナ[^\d]{0,10}([\d,]+)円\/g/);
-      if(goldMatch){
-        p={jpy_per_g:{
-          gold:parseInt(goldMatch[1].replace(/,/g,'')),
-          silver:silverMatch?parseInt(silverMatch[1].replace(/,/g,'')):fb.silver,
-          platinum:platMatch?parseInt(platMatch[1].replace(/,/g,'')):fb.platinum,
-          palladium:fb.palladium,copper:fb.copper,aluminum:fb.aluminum,
-          iron:fb.iron,stainless:fb.stainless,lead:fb.lead,indium:fb.indium,
-          cobalt:fb.cobalt,lithium:fb.lithium,tin:fb.tin,tantalum:fb.tantalum
-        }};
+  // 試行ヘルパー
+  const tryFetch=async(prompt,useSearch,model,label)=>{
+    try{
+      const t=await callAPI([{role:"user",content:prompt}],useSearch,model,true);
+      let p=null;
+      try{p=parseJSON(t);}catch(e){
+        console.warn(`${label}: JSON parse失敗, 正規表現で再試行`);
+        // 正規表現で主要金属だけ抽出
+        const extract=(regex,fallback)=>{
+          const m=t.match(regex);
+          return m?parseFloat(m[1].replace(/,/g,'')):fallback;
+        };
+        const goldV=extract(/金[：:\s][^\d]{0,10}([\d,]+(?:\.\d+)?)\s*円\s*[/／]\s*g/,null);
+        if(goldV){
+          p={jpy_per_g:{
+            gold:goldV,
+            silver:extract(/銀[：:\s][^\d]{0,10}([\d,]+(?:\.\d+)?)\s*円\s*[/／]\s*g/,fb.silver),
+            platinum:extract(/(?:プラチナ|白金)[：:\s][^\d]{0,10}([\d,]+(?:\.\d+)?)\s*円\s*[/／]\s*g/,fb.platinum),
+            palladium:extract(/パラジウム[：:\s][^\d]{0,10}([\d,]+(?:\.\d+)?)\s*円\s*[/／]\s*g/,fb.palladium),
+            ...Object.fromEntries(['copper','aluminum','iron','stainless','lead','indium','cobalt','lithium','tin','tantalum'].map(k=>[k,fb[k]]))
+          }};
+        }
       }
+      if(!p||!p.jpy_per_g)return null;
+      const v=validatePrices(p.jpy_per_g);
+      console.log(`${label}: 妥当な価格 ${v.criticalOk}/4種, 問題:`,v.issues);
+      if(v.isUsable){
+        return {valid:v.valid, source:p.source||label};
+      }else{
+        console.warn(`${label}: 貴金属の妥当性不十分 (${v.criticalOk}/4)`,v.issues);
+        return null;
+      }
+    }catch(e){
+      console.warn(`${label} 失敗:`,e.message);
+      return null;
     }
-    if(p.jpy_per_g){
-      Object.assign(metalPrices,p.jpy_per_g);
-      localStorage.setItem('umk_prices',JSON.stringify({date:today,prices:{...metalPrices}}));
-      showPriceBadge(today,'取得済（当日）');
-      for(const[k,v]of Object.entries(fb)){if(!metalPrices[k])metalPrices[k]=v;}
-      return;
-    }
-  }catch(e){ console.warn('1st失敗:',e.message); }
+  };
 
-  // 2nd: Haiku＋検索なし・学習データ概算（約0.2円）
-  try{
-    const t2=await callAPI([{role:"user",content:prompt2}],false,'haiku');
-    const p=parseJSON(t2);
-    if(p.jpy_per_g){
-      Object.assign(metalPrices,p.jpy_per_g);
-      localStorage.setItem('umk_prices',JSON.stringify({date:today,prices:{...metalPrices}}));
-      showPriceBadge(today,'概算値（学習データ）');
-      for(const[k,v]of Object.entries(fb)){if(!metalPrices[k])metalPrices[k]=v;}
-      return;
-    }
-  }catch(e){ console.warn('2nd失敗:',e.message); }
+  // 1st: Haiku+ウェブ検索
+  let result=await tryFetch(prompt1,true,'haiku','Haiku+Web検索');
 
-  // 3rd: ハードコード値（0円）
+  // 2nd: Sonnet+ウェブ検索（より高精度モデル）
+  if(!result){
+    showPriceBadge(today,'高精度モデルで再取得中...',true);
+    result=await tryFetch(prompt1,true,'sonnet','Sonnet+Web検索');
+  }
+
+  // 3rd: Haiku+検索なし（学習データ概算）
+  if(!result){
+    showPriceBadge(today,'学習データから推定中...',true);
+    result=await tryFetch(prompt2,false,'haiku','Haiku概算');
+  }
+
+  if(result){
+    Object.keys(metalPrices).forEach(k=>metalPrices[k]=null);
+    Object.assign(metalPrices,result.valid);
+    // 欠けている金属はフォールバック
+    for(const[k,v]of Object.entries(fb)){if(!metalPrices[k])metalPrices[k]=v;}
+    localStorage.setItem('umk_prices',JSON.stringify({date:today,prices:{...metalPrices},source:result.source}));
+    const isEstimate=result.source&&result.source.includes('概算');
+    showPriceBadge(today,result.source||'取得済',false,isEstimate);
+    return;
+  }
+
+  // 4th: 全て失敗 → 固定フォールバック値
   Object.assign(metalPrices,fb);
-  showPriceBadge(today,'固定値使用',false,true);
-  for(const[k,v]of Object.entries(fb)){if(!metalPrices[k])metalPrices[k]=v;}
+  showPriceBadge(today,'取得失敗・固定値使用',false,true);
+  // ユーザーに通知
+  setTimeout(()=>{
+    if(confirm('相場の自動取得に失敗しました。\n固定値（金26,500円/g等）で動作していますが、本日の相場を手動入力しますか？\n\n「OK」で手動入力画面を開きます。'))openManualPriceDialog();
+  },500);
+}
+
+// 強制再取得
+function forceRefreshPrices(){
+  if(!API_KEY){alert('APIキーを設定してください');return;}
+  fetchMetalPrices(true);
+}
+
+// ─── 相場の手動入力ダイアログ ─────────────────
+const MANUAL_PRICE_FIELDS=[
+  ['gold','金','26500','貴金属'],
+  ['silver','銀','430','貴金属'],
+  ['palladium','パラジウム','3800','貴金属'],
+  ['platinum','白金','11300','貴金属'],
+  ['copper','銅','1.40','スクラップ'],
+  ['aluminum','アルミ','0.22','スクラップ'],
+  ['iron','鉄','0.06','スクラップ'],
+  ['stainless','ステンレス','0.10','スクラップ'],
+  ['lead','鉛','0.25','スクラップ'],
+  ['indium','インジウム','18','レアメタル'],
+  ['cobalt','コバルト','3.5','レアメタル'],
+  ['lithium','リチウム','2.5','レアメタル'],
+  ['tin','錫','1.4','レアメタル'],
+  ['tantalum','タンタル','25','レアメタル']
+];
+function openManualPriceDialog(){
+  const modal=document.getElementById('manualPriceModal');
+  const box=document.getElementById('manualPriceInputs');
+  box.innerHTML=MANUAL_PRICE_FIELDS.map(([k,name,ph,cat])=>{
+    const cur=metalPrices[k];
+    return `<div><label style="font-size:11px;color:var(--tx2)">${name} <span style="color:var(--tx3);font-size:10px">(${cat})</span></label><input type="number" step="0.01" id="mp_${k}" value="${cur!==null&&cur!==undefined?cur:''}" placeholder="${ph}"></div>`;
+  }).join('');
+  modal.style.display='flex';
+}
+function closeManualPriceDialog(){
+  document.getElementById('manualPriceModal').style.display='none';
+}
+function saveManualPrices(){
+  const newPrices={};
+  for(const[k]of MANUAL_PRICE_FIELDS){
+    const el=document.getElementById('mp_'+k);
+    const v=parseFloat(el.value);
+    if(!isNaN(v)&&v>0)newPrices[k]=v;
+  }
+  const v=validatePrices(newPrices);
+  if(v.issues.length>0){
+    if(!confirm('以下の値が妥当範囲を外れています:\n'+v.issues.join('\n')+'\n\nそれでも保存しますか？'))return;
+  }
+  Object.assign(metalPrices,newPrices);
+  const today=new Date().toLocaleDateString('ja-JP');
+  localStorage.setItem('umk_prices',JSON.stringify({date:today,prices:{...metalPrices},source:'手動入力'}));
+  showPriceBadge(today,'手動入力',false,false);
+  closeManualPriceDialog();
 }
 
 function showPriceBadge(date,status,loading=false,warn=false){
