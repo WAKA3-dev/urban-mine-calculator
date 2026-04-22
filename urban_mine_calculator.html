@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>都市鉱山査定計算機</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+:root{--bg:#f5f4f0;--sur:#fff;--sur2:#f0ede8;--bdr:rgba(0,0,0,.1);--bdr2:rgba(0,0,0,.18);--tx:#1a1a18;--tx2:#6b6860;--tx3:#9e9b94;--acc:#2b5fad;--acc-bg:#eaf1fb;--grn:#2a7a4b;--grn-bg:#e8f5ee;--red:#b03030;--red-bg:#fbeaea;--amb:#7a5a10;--amb-bg:#fdf3dc;--r:10px;--rs:6px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--tx);font-size:14px;line-height:1.6;min-height:100vh}
+header{background:var(--tx);color:#fff;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.h-title{font-size:15px;font-weight:700;letter-spacing:.04em}
+.h-sub{font-size:11px;opacity:.55;margin-top:1px}
+.h-badge{font-family:'IBM Plex Mono',monospace;font-size:10px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:20px;padding:3px 10px;color:rgba(255,255,255,.7)}
+#keyBanner{background:#fffbe6;border-bottom:2px solid #f0c040;padding:10px 24px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#keyBanner .lbl{font-size:12px;font-weight:700;color:#7a5a10;white-space:nowrap}
+#keyInput{flex:1;min-width:240px;font-family:'IBM Plex Mono',monospace;font-size:12px;padding:6px 10px;border:1.5px solid #d4aa40;border-radius:var(--rs);background:#fff;color:var(--tx);outline:none}
+#keyInput:focus{border-color:var(--acc)}
+#saveKeyBtn{padding:6px 16px;background:var(--tx);color:#fff;border:none;border-radius:var(--rs);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+#keySt{font-size:11px;color:var(--tx2)}
+#keySt.ok{color:var(--grn);font-weight:500}
+main{max-width:820px;margin:0 auto;padding:20px 16px 60px}
+.sec{background:var(--sur);border:1px solid var(--bdr);border-radius:var(--r);padding:18px 20px;margin-bottom:14px}
+.sec-title{font-size:11px;font-weight:700;color:var(--tx2);letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px}
+.upload-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+@media(max-width:500px){.upload-pair{grid-template-columns:1fr}}
+.uzone{border:2px dashed var(--bdr2);border-radius:var(--r);padding:20px 14px;text-align:center;cursor:pointer;transition:all .2s;background:var(--sur2);min-height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+.uzone:hover,.uzone.drag{border-color:var(--acc);background:var(--acc-bg)}
+.uzone.has-img{border-style:solid;border-color:var(--bdr)}
+.uzone-icon{font-size:26px}
+.uzone-title{font-size:13px;font-weight:500;color:var(--tx)}
+.uzone-sub{font-size:11px;color:var(--tx2);line-height:1.5}
+.uzone-badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px}
+.ub-must{background:var(--acc-bg);color:var(--acc)}
+.ub-opt{background:var(--sur2);color:var(--tx2);border:0.5px solid var(--bdr2)}
+.preview-wrap{position:relative;width:100%}
+.preview-wrap img{width:100%;max-height:160px;object-fit:contain;border-radius:var(--rs)}
+.del-btn{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:22px;height:22px;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
+.go-btn{width:100%;padding:14px;background:var(--tx);color:#fff;border:none;border-radius:var(--r);font-size:15px;font-weight:700;cursor:pointer;letter-spacing:.04em;transition:background .15s;display:flex;align-items:center;justify-content:center;gap:10px}
+.go-btn:hover{background:#333}
+.go-btn:disabled{background:#999;cursor:default}
+.prog{display:none;margin-top:12px}
+.prog.show{display:block}
+.prog-step{display:flex;align-items:center;gap:10px;padding:6px 10px;border-radius:var(--rs);margin-bottom:4px;font-size:12px;background:var(--sur2);color:var(--tx2)}
+.prog-step.active{background:var(--acc-bg);color:var(--acc)}
+.prog-step.done{background:var(--grn-bg);color:var(--grn)}
+.prog-step.err{background:var(--red-bg);color:var(--red)}
+.ps-icon{font-size:14px;flex-shrink:0}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(0,0,0,.15);border-top-color:currentColor;border-radius:50%;animation:spin .6s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.result-area{display:none}
+.result-area.show{display:block}
+.rcards{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+@media(max-width:560px){.rcards{grid-template-columns:1fr 1fr}}
+.rcard{background:var(--sur2);border-radius:var(--rs);padding:10px}
+.rlabel{font-size:11px;color:var(--tx2);margin-bottom:3px;line-height:1.4;font-weight:500}
+.rval{font-size:18px;font-weight:700;font-family:'IBM Plex Mono',monospace;color:var(--tx)}
+.rval.ok{color:var(--grn)}.rval.ng{color:var(--red)}
+.runit{font-size:10px;color:var(--tx3);margin-top:1px}
+.verdict{border-radius:var(--rs);padding:12px 16px;font-size:14px;font-weight:700;text-align:center;margin-bottom:12px}
+.verdict.buy{background:var(--grn-bg);color:var(--grn);border:1px solid #b8dfc9}
+.verdict.pass{background:var(--red-bg);color:var(--red);border:1px solid #f0c0c0}
+.verdict.neutral{background:var(--sur2);color:var(--tx2)}
+.bwrap{margin-bottom:12px}
+.blabel{font-size:11px;color:var(--tx2);margin-bottom:4px;font-weight:500}
+.btrack{height:12px;background:var(--sur2);border-radius:6px;overflow:hidden;display:flex}
+.bseg{height:100%}
+.bleg{display:flex;gap:12px;margin-top:5px;flex-wrap:wrap}
+.bleg-item{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--tx2)}
+.bdot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.bgroup{margin-bottom:10px}
+.glabel{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;margin-bottom:5px;display:inline-block}
+.gp{background:#eeecfc;color:#4a3da8}.gs{background:#e5f5ef;color:#1a7a60}.gr{background:var(--amb-bg);color:var(--amb)}
+.bdrow{display:flex;justify-content:space-between;font-size:12px;color:var(--tx2);padding:3px 0;border-bottom:0.5px solid var(--bdr)}
+.bdrow:last-child{border:none}
+.bdrow.nop{opacity:.6}
+.npbadge{display:inline-block;font-size:10px;padding:1px 6px;border-radius:20px;background:var(--amb-bg);color:var(--amb);margin-left:5px;font-weight:700}
+.bdtotal{display:flex;justify-content:space-between;font-size:14px;font-weight:700;color:var(--tx);padding:7px 0;border-top:2px solid var(--bdr2);margin-top:4px}
+.bdnote{font-size:11px;color:var(--tx2);margin-top:6px;padding:7px 10px;background:var(--amb-bg);border-radius:var(--rs);border:1px solid #e8d090;line-height:1.6}
+.ship-input{display:none;margin-top:10px;padding:12px 14px;background:var(--amb-bg);border-radius:var(--rs);border:1px solid #e8d090}
+.ship-input.show{display:block}
+.ship-row{display:flex;gap:8px;align-items:flex-end;margin-top:8px}
+.ship-row>div{flex:1}
+label{font-size:11px;color:var(--tx2);display:block;margin-bottom:3px;font-weight:500}
+input[type=number],input[type=text],select{width:100%;padding:7px 10px;font-size:13px;font-family:'Noto Sans JP',sans-serif;background:var(--sur);border:1.5px solid var(--bdr2);border-radius:var(--rs);color:var(--tx);outline:none;transition:border-color .15s}
+input:focus,select:focus{border-color:var(--acc)}
+.btn{padding:7px 16px;border-radius:var(--rs);font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid var(--bdr2);background:var(--sur);color:var(--tx);transition:all .15s;white-space:nowrap;font-family:'Noto Sans JP',sans-serif}
+.btn:hover{background:var(--sur2)}
+.btn-primary{background:var(--acc);color:#fff;border-color:var(--acc)}
+.btn-primary:hover{background:#1e4d96}
+.info-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:4px}
+.info-card{background:var(--sur2);border-radius:var(--rs);padding:8px 12px}
+.info-label{font-size:10px;color:var(--tx2);margin-bottom:2px;font-weight:500}
+.info-val{font-size:13px;font-weight:700;color:var(--tx)}
+.reset-btn{width:100%;padding:9px;background:var(--sur2);border:1.5px solid var(--bdr2);border-radius:var(--rs);font-size:13px;font-weight:500;color:var(--tx2);cursor:pointer;font-family:'Noto Sans JP',sans-serif;transition:all .15s;margin-top:8px}
+.reset-btn:hover{background:var(--bdr)}
+.export-row{display:flex;gap:8px;margin-top:10px;margin-bottom:4px}
+.export-btn{flex:1;padding:9px;border-radius:var(--rs);font-size:12px;font-weight:700;cursor:pointer;font-family:'Noto Sans JP',sans-serif;transition:all .15s;border:1.5px solid var(--bdr2)}
+.export-btn.csv{background:#1D6F42;color:#fff;border-color:#1D6F42}
+.export-btn.csv:hover{background:#155230}
+.export-btn.copy{background:#185FA5;color:#fff;border-color:#185FA5}
+.export-btn.copy:hover{background:#0C447C}
+.export-btn.copied{background:var(--grn);border-color:var(--grn)}
+.hist-sec{background:var(--sur);border:1px solid var(--bdr);border-radius:var(--r);padding:16px 20px;margin-bottom:14px;display:none}
+.hist-sec.show{display:block}
+.hist-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.hist-title{font-size:11px;font-weight:700;color:var(--tx2);letter-spacing:.06em;text-transform:uppercase}
+.hist-count{font-size:12px;color:var(--tx2);background:var(--sur2);padding:2px 10px;border-radius:20px}
+.hist-table-wrap{overflow-x:auto;margin-bottom:10px}
+.hist-table{width:100%;border-collapse:collapse;font-size:12px}
+.hist-table th{text-align:left;padding:6px 8px;border-bottom:2px solid var(--bdr2);color:var(--tx2);font-weight:700;white-space:nowrap}
+.hist-table td{padding:6px 8px;border-bottom:0.5px solid var(--bdr);color:var(--tx);white-space:nowrap}
+.hist-table tr:last-child td{border-bottom:none}
+.hist-table tr:hover td{background:var(--sur2)}
+.verdict-ok{color:var(--grn);font-weight:700}
+.verdict-ng{color:var(--red);font-weight:700}
+.hist-actions{display:flex;gap:8px}
+.hist-btn{padding:7px 14px;border-radius:var(--rs);font-size:12px;font-weight:700;cursor:pointer;font-family:'Noto Sans JP',sans-serif;transition:all .15s;border:1.5px solid var(--bdr2)}
+.hist-btn.dl{background:#1D6F42;color:#fff;border-color:#1D6F42}
+.hist-btn.dl:hover{background:#155230}
+.hist-btn.clear{background:var(--sur2);color:var(--tx2)}
+.hist-btn.clear:hover{background:var(--red-bg);color:var(--red);border-color:var(--red)}
+.mode-tabs{display:flex;gap:0;margin-bottom:16px;border:1.5px solid var(--bdr2);border-radius:var(--r);overflow:hidden}
+.mode-tab{flex:1;padding:10px 8px;font-size:13px;font-weight:500;font-family:'Noto Sans JP',sans-serif;cursor:pointer;border:none;background:var(--sur2);color:var(--tx2);transition:all .15s;text-align:center}
+.mode-tab.active{background:var(--tx);color:#fff}
+.mode-tab:first-child{border-right:1.5px solid var(--bdr2)}
+.manual-form{display:none}
+.manual-form.show{display:block}
+.img-mode{display:block}
+.img-mode.hide{display:none}
+.fg2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+@media(max-width:500px){.fg2{grid-template-columns:1fr}}
+.price-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+@media(max-width:500px){.price-row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div><div class="h-title">都市鉱山査定計算機</div><div class="h-sub">Urban Mine Valuation Tool</div></div>
+  <div class="h-badge">v2.1</div>
+</header>
+
+<div id="keyBanner">
+  <div class="lbl">⚠ APIキーを入力してください</div>
+  <input type="password" id="keyInput" placeholder="sk-ant-api03-..." autocomplete="off">
+  <button id="saveKeyBtn" onclick="saveKey()">保存して使用開始</button>
+  <span id="keySt"></span>
+</div>
+
+<main>
+  <div class="sec">
+    <div class="sec-title">査定方法を選択</div>
+
+    <!-- モード切替タブ -->
+    <div class="mode-tabs">
+      <button class="mode-tab active" id="tab-img" onclick="switchMode('img')">📷 画像から査定（全自動）</button>
+      <button class="mode-tab" id="tab-manual" onclick="switchMode('manual')">⌨️ メーカー・型番を入力して査定</button>
+    </div>
+
+    <!-- ── 画像モード ── -->
+    <div id="imgMode">
+      <div style="font-size:11px;color:var(--tx2);background:var(--sur2);border-radius:var(--rs);padding:6px 10px;margin-bottom:8px;text-align:center">
+        💡 各ゾーンをクリックして選択後、<strong>Ctrl+V</strong> でスナッピングツールの画像を貼り付けできます
+      </div>
+      <div class="upload-pair">
+        <div class="uzone" id="zone1" tabindex="0"
+          ondragover="event.preventDefault();this.classList.add('drag')"
+          ondragleave="this.classList.remove('drag')"
+          ondrop="onDrop(event,1)"
+          onclick="setActiveZone(1)">
+          <div id="ph1">
+            <div class="uzone-icon">📷</div>
+            <div class="uzone-title">商品画像①</div>
+            <div class="uzone-sub">外観・全体写真<br>クリック後Ctrl+Vで貼付可</div>
+            <div class="uzone-badge ub-must" style="margin-top:4px">必須</div>
+          </div>
+          <div id="pv1" style="display:none;width:100%">
+            <div class="preview-wrap">
+              <img id="img1" src="" alt="">
+              <button class="del-btn" onclick="event.stopPropagation();clearImg(1)">×</button>
+            </div>
+          </div>
+        </div>
+        <input type="file" id="fi1" accept="image/*" style="display:none" onchange="onFile(event,1)">
+
+        <!-- 商品画像② -->
+        <div class="uzone" id="zone1b" tabindex="0"
+          ondragover="event.preventDefault();this.classList.add('drag')"
+          ondragleave="this.classList.remove('drag')"
+          ondrop="onDrop(event,'1b')"
+          onclick="setActiveZone('1b')">
+          <div id="ph1b">
+            <div class="uzone-icon">🏷</div>
+            <div class="uzone-title">商品画像②</div>
+            <div class="uzone-sub">ラベル・型番・銘板<br>クリック後Ctrl+Vで貼付可</div>
+            <div class="uzone-badge ub-opt" style="margin-top:4px">任意</div>
+          </div>
+          <div id="pv1b" style="display:none;width:100%">
+            <div class="preview-wrap">
+              <img id="img1b" src="" alt="">
+              <button class="del-btn" onclick="event.stopPropagation();clearImg('1b')">×</button>
+            </div>
+          </div>
+        </div>
+        <input type="file" id="fi1b" accept="image/*" style="display:none" onchange="onFile(event,'1b')">
+
+        <div class="uzone" id="zone2" tabindex="0"
+          ondragover="event.preventDefault();this.classList.add('drag')"
+          ondragleave="this.classList.remove('drag')"
+          ondrop="onDrop(event,2)"
+          onclick="setActiveZone(2)">
+          <div id="ph2">
+            <div class="uzone-icon">🖥</div>
+            <div class="uzone-title">価格・送料の画像</div>
+            <div class="uzone-sub">ヤフオク画面SS・値札など<br>クリック後Ctrl+Vで貼付可</div>
+            <div class="uzone-badge ub-opt" style="margin-top:4px">任意</div>
+          </div>
+          <div id="pv2" style="display:none;width:100%">
+            <div class="preview-wrap">
+              <img id="img2" src="" alt="">
+              <button class="del-btn" onclick="event.stopPropagation();clearImg(2)">×</button>
+            </div>
+          </div>
+        </div>
+        <input type="file" id="fi2" accept="image/*" style="display:none" onchange="onFile(event,2)">
+      </div>
+      <!-- Gemini査定スクリーンショット -->
+      <div class="uzone" id="zone3" tabindex="0"
+        ondragover="event.preventDefault();this.classList.add('drag')"
+        ondragleave="this.classList.remove('drag')"
+        ondrop="onDrop(event,3)"
+        onclick="setActiveZone(3)"
+        style="margin-bottom:10px">
+        <div id="ph3">
+          <div class="uzone-icon">🤖</div>
+          <div class="uzone-title">Gemini査定結果の画像</div>
+          <div class="uzone-sub">GeminiのAI査定スクリーンショット<br>詳細不明な機器の精度向上に</div>
+          <div class="uzone-badge ub-opt" style="margin-top:4px">任意</div>
+        </div>
+        <div id="pv3" style="display:none;width:100%">
+          <div class="preview-wrap">
+            <img id="img3" src="" alt="">
+            <button class="del-btn" onclick="clearImg(3)">×</button>
+          </div>
+        </div>
+      </div>
+      <input type="file" id="fi3" accept="image/*" style="display:none" onchange="onFile(event,3)">
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        <button class="btn" style="flex:1" onclick="document.getElementById('fi1').click()">商品①を選択</button>
+        <button class="btn" style="flex:1" onclick="document.getElementById('fi1b').click()">商品②を選択</button>
+        <button class="btn" style="flex:1" onclick="document.getElementById('fi2').click()">価格画像を選択</button>
+        <button class="btn" style="flex:1" onclick="document.getElementById('fi3').click()">Gemini画像を選択</button>
+      </div>
+      <button class="go-btn" id="goBtn" onclick="runAll()">
+        <span id="goBtnIcon">🔍</span>
+        <span id="goBtnText">画像を解析して査定する</span>
+      </button>
+    </div>
+
+    <!-- ── テキスト入力モード ── -->
+    <div id="manualMode" style="display:none">
+      <div class="fg2">
+        <div><label>メーカー名</label><input type="text" id="mMaker" placeholder="例: NEC, Sony, Panasonic"></div>
+        <div><label>型番・モデル名</label><input type="text" id="mModel" placeholder="例: PC-8801mkII, WV-F300"></div>
+      </div>
+      <div style="font-size:11px;color:var(--tx2);margin-bottom:10px;padding:8px 10px;background:var(--sur2);border-radius:var(--rs)">
+        AIがウェブ検索で製造年と機種固有の資源含有量を調査します。メーカー・型番が不明な場合は分かる範囲で入力してください。
+      </div>
+      <div style="font-size:11px;font-weight:700;color:var(--tx2);margin-bottom:6px">落札価格・送料・しきい値（わかれば入力）</div>
+      <div class="price-row">
+        <div><label>落札価格（円）</label><input type="number" id="mBid" value="0" min="0"></div>
+        <div><label>送料（円）</label><input type="number" id="mShip" value="0" min="0"></div>
+      </div>
+      <div style="margin-bottom:14px">
+        <label>判定しきい値（%）<span style="font-size:10px;font-weight:400;color:var(--tx3)">　査定額の何%以下なら「お得」か</span></label>
+        <input type="number" id="mThr" value="33" min="1" max="100" style="max-width:100px">
+      </div>
+      <button class="go-btn" id="mGoBtn" onclick="runManual()">
+        <span>🔍</span>
+        <span id="mGoBtnText">製造年・資源含有量を調査して査定する</span>
+      </button>
+    </div>
+
+    <!-- 進捗表示（両モード共通） -->
+    <div class="prog" id="prog">
+      <div class="prog-step" id="ps1"><span class="ps-icon">📷</span><span id="ps1t">メーカー・型番を認識中...</span></div>
+      <div class="prog-step" id="ps2"><span class="ps-icon">💰</span><span id="ps2t">価格・送料を読み取り中...</span></div>
+      <div class="prog-step" id="ps3"><span class="ps-icon">🔍</span><span id="ps3t">製造年・資源含有量を調査中...</span></div>
+      <div class="prog-step" id="ps4"><span class="ps-icon">📊</span><span id="ps4t">相場で査定額を計算中...</span></div>
+    </div>
+  </div>
+
+  <!-- 送料手動入力（取得できなかった場合） -->
+  <div class="ship-input" id="shipInput">
+    <div style="font-size:12px;font-weight:700;color:var(--amb);margin-bottom:4px">⚠ 送料が画像から取得できませんでした</div>
+    <div style="font-size:11px;color:var(--tx2)">送料を入力して再計算してください。送料が無料または不明の場合は0を入力。</div>
+    <div class="ship-row">
+      <div><label>送料（円）</label><input type="number" id="shipManual" value="0" min="0"></div>
+      <button class="btn btn-primary" onclick="recalculate()">再計算</button>
+    </div>
+  </div>
+
+  <!-- 結果 -->
+  <div class="result-area" id="resultArea">
+    <div class="sec">
+      <!-- 査定情報サマリー -->
+      <div class="info-grid" id="infoGrid" style="margin-bottom:14px"></div>
+
+      <div class="rcards">
+        <div class="rcard"><div class="rlabel">素材査定額（相場あり）</div><div class="rval" id="rAssess">—</div><div class="runit">円</div></div>
+        <div class="rcard"><div class="rlabel">総額 / 査定額</div><div class="rval" id="rRatio">—</div><div class="runit">%</div></div>
+        <div class="rcard"><div class="rlabel">しきい値金額（50%）</div><div class="rval" id="rThr">—</div><div class="runit">円以下なら「お得」</div></div>
+        <div class="rcard"><div class="rlabel">落札総額</div><div class="rval" id="rTotal">—</div><div class="runit">円（送料込）</div></div>
+      </div>
+
+      <div class="bwrap" id="barWrap"></div>
+      <div class="verdict neutral" id="verdict">計算中...</div>
+      <div id="breakdown"></div>
+      <div class="bdtotal"><span>合計素材価値（相場あり分）</span><span id="bdTotal">—</span></div>
+      <div class="bdnote" id="bdNote" style="display:none"></div>
+      <div class="export-row">
+        <button class="export-btn csv" onclick="exportCSV()">📥 CSVダウンロード</button>
+        <button class="export-btn copy" id="copyBtn" onclick="copyToClipboard()">📋 クリップボードにコピー</button>
+      </div>
+    </div>
+    <button class="reset-btn" onclick="resetAll()">↺ 最初からやり直す（入力内容をリセット）</button>
+  </div>
+
+  <!-- 査定履歴 -->
+  <div class="hist-sec" id="histSec">
+    <div class="hist-header">
+      <div class="hist-title">査定履歴</div>
+      <span class="hist-count" id="histCount">0件</span>
+    </div>
+    <div class="hist-table-wrap">
+      <table class="hist-table" id="histTable">
+        <thead>
+          <tr>
+            <th>日付</th><th>時刻</th><th>メーカー</th><th>型番</th>
+            <th>素材査定額</th><th>落札総額</th><th>判定</th>
+          </tr>
+        </thead>
+        <tbody id="histBody"></tbody>
+      </table>
+    </div>
+    <div class="hist-actions">
+      <button class="hist-btn dl" onclick="downloadAllCSV()">📥 全件CSVダウンロード</button>
+      <button class="hist-btn clear" onclick="clearHistory()">🗑 履歴を消去</button>
+    </div>
+  </div>
+</main>
+
+<script>
+const THR_DEFAULT=33;
+let API_KEY=localStorage.getItem('umk_api')||'';
+let jpyRate=155;
+let metalPrices={gold:null,silver:null,palladium:null,platinum:null,copper:null,aluminum:null,iron:null,stainless:null,lead:null,indium:null,cobalt:null,lithium:null,tin:null,tantalum:null};
+let imgData={1:{b64:null,type:null},'1b':{b64:null,type:null},2:{b64:null,type:null},3:{b64:null,type:null}};
+let activeZone=1; // Ctrl+V貼り付け先ゾーン
+
+function setActiveZone(n){
+  activeZone=n;
+  // アクティブゾーンを視覚的に強調
+  [1,'1b',2,3].forEach(id=>{
+    const el=document.getElementById('zone'+id);
+    if(el)el.style.outline=id===n?'2px solid var(--acc)':'none';
+  });
+}
+let lastResult=null;
+
+// APIキー
+function saveKey(){
+  const k=document.getElementById('keyInput').value.trim();
+  if(!k.startsWith('sk-ant-')){setSt('APIキーの形式が正しくありません',false);return;}
+  API_KEY=k;localStorage.setItem('umk_api',k);
+  setSt('✓ 保存しました',true);
+  document.getElementById('keyBanner').style.cssText='background:#edfaee;border-bottom-color:#80cc90;padding:10px 24px;display:flex;align-items:center;gap:10px;flex-wrap:wrap';
+  fetchMetalPrices();
+}
+function setSt(msg,ok){const el=document.getElementById('keySt');el.textContent=msg;el.className=ok?'ok':'';}
+if(API_KEY){document.getElementById('keyInput').value=API_KEY;setSt('✓ 保存済みのAPIキーを使用中',true);document.getElementById('keyBanner').style.cssText='background:#edfaee;border-bottom-color:#80cc90;padding:10px 24px;display:flex;align-items:center;gap:10px;flex-wrap:wrap';}
+
+// 画像処理
+function onFile(ev,n){const f=ev.target.files[0];if(f)loadImg(f,n);ev.target.value='';}
+function onDrop(ev,n){ev.preventDefault();document.getElementById('zone'+n).classList.remove('drag');const f=ev.dataTransfer.files[0];if(f&&f.type.startsWith('image/'))loadImg(f,n);}
+function loadImg(file,n){
+  if(!file||!file.type.startsWith('image/'))return;
+  const MAX_PX=1920, MAX_BYTES=4*1024*1024;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const image=new Image();
+    image.onload=()=>{
+      let w=image.width,h=image.height;
+      if(w>MAX_PX||h>MAX_PX){const ratio=Math.min(MAX_PX/w,MAX_PX/h);w=Math.round(w*ratio);h=Math.round(h*ratio);}
+      const canvas=document.createElement('canvas');
+      canvas.width=w;canvas.height=h;
+      canvas.getContext('2d').drawImage(image,0,0,w,h);
+      let q=0.85,dataUrl=canvas.toDataURL('image/jpeg',q);
+      while(dataUrl.length*0.75>MAX_BYTES&&q>0.3){q-=0.1;dataUrl=canvas.toDataURL('image/jpeg',q);}
+      imgData[n]={b64:dataUrl.split(',')[1],type:'image/jpeg'};
+      document.getElementById('img'+n).src=dataUrl;
+      document.getElementById('ph'+n).style.display='none';
+      document.getElementById('pv'+n).style.display='block';
+      document.getElementById('zone'+n).classList.add('has-img');
+    };
+    image.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+function clearImg(n){
+  imgData[n]={b64:null,type:null};
+  document.getElementById('ph'+n).style.display='';
+  document.getElementById('pv'+n).style.display='none';
+  document.getElementById('zone'+n).classList.remove('has-img','drag');
+  document.getElementById('zone'+n).style.outline='none';
+}
+// Ctrl+V 貼り付け（アクティブゾーン優先、なければ空きゾーンへ）
+document.addEventListener('paste',ev=>{
+  const items=ev.clipboardData?.items;
+  if(!items)return;
+  for(const item of Array.from(items)){
+    if(item.type.startsWith('image/')){
+      ev.preventDefault();
+      // アクティブゾーンが設定されていればそこへ、なければ最初の空きへ
+      let target=activeZone;
+      if(!target||imgData[target]?.b64){
+        // 空きゾーンを探す
+        target=[1,'1b',2,3].find(n=>!imgData[n]?.b64)||1;
+      }
+      loadImg(item.getAsFile(),target);
+      setActiveZone(null);
+      return;
+    }
+  }
+});
+
+// APIコール（model: 'haiku'=安価・高速 / 'sonnet'=高精度）
+async function callAPI(messages,useSearch=false,model='haiku',forPrice=false){
+  if(!API_KEY)throw new Error('APIキーが未設定です');
+  const modelId=model==='sonnet'?'claude-sonnet-4-6':'claude-haiku-4-5-20251001';
+  // 相場取得は旧ツール（安定）、それ以外は新ツール（動的フィルタリング）
+  const searchTool=forPrice?'web_search_20250305':'web_search_20260209';
+  const maxTok=forPrice?2000:(useSearch?2000:600);
+  const body={model:modelId,max_tokens:maxTok,messages};
+  if(useSearch)body.tools=[{type:searchTool,name:"web_search",max_uses:forPrice?1:3,allowed_callers:["direct"]}];
+  const res=await fetch("https://api.anthropic.com/v1/messages",{
+    method:"POST",
+    headers:{"Content-Type":"application/json","x-api-key":API_KEY,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+    body:JSON.stringify(body)
+  });
+  if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${res.status}`);}
+  const data=await res.json();
+  return data.content.map(i=>i.type==="text"?i.text:"").filter(Boolean).join("\n");
+}
+function parseJSON(text){
+  // ```json ... ``` ブロックを優先的に探す
+  const codeBlock=text.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+  if(codeBlock){try{return JSON.parse(codeBlock[1]);}catch(e){}}
+  // ネストを考慮した { } の抽出
+  const start=text.indexOf('{');
+  if(start===-1)throw new Error('JSON not found');
+  let depth=0,end=-1;
+  for(let i=start;i<text.length;i++){
+    if(text[i]==='{')depth++;
+    else if(text[i]==='}'){depth--;if(depth===0){end=i;break;}}
+  }
+  if(end===-1)throw new Error('JSON not found');
+  try{return JSON.parse(text.slice(start,end+1));}
+  catch(e){
+    // JSON内の不正文字を除去して再試行
+    const cleaned=text.slice(start,end+1).replace(/[\u0000-\u001F\u007F]/g,' ').replace(/,\s*}/g,'}').replace(/,\s*]/g,']');
+    return JSON.parse(cleaned);
+  }
+}
+
+// 進捗UI
+function setPS(id,state,text){
+  const el=document.getElementById(id);
+  el.className='prog-step '+(state||'');
+  const icon={active:'<span class="spinner"></span>',done:'✓',err:'✗','':'⬤'}[state]||'⬤';
+  el.innerHTML=`${icon}<span>${text||document.getElementById(id+'t')?.textContent||''}</span>`;
+}
+
+// 金属相場取得（1日1回キャッシュ・3段階フォールバック）
+async function fetchMetalPrices(){
+  if(!API_KEY)return;
+  const today=new Date().toLocaleDateString('ja-JP');
+  const fb={gold:11500,silver:115,palladium:3200,platinum:4300,copper:1.12,aluminum:0.19,iron:0.05,stainless:0.08,lead:0.23,indium:18,cobalt:3.5,lithium:2.5,tin:1.3,tantalum:25};
+
+  // キャッシュ確認（当日分があれば再取得しない）
+  try{
+    const cached=JSON.parse(localStorage.getItem('umk_prices')||'null');
+    if(cached&&cached.date===today&&cached.prices){
+      Object.assign(metalPrices,cached.prices);
+      showPriceBadge(today,'キャッシュ');
+      for(const[k,v]of Object.entries(fb)){if(!metalPrices[k])metalPrices[k]=v;}
+      return;
+    }
+  }catch(e){}
+
+  showPriceBadge(today,'取得中...',true);
+
+  const prompt1=`${today}の金属相場（円/g）。田中貴金属・金相場.jpを検索。
+JSON形式のみで回答（説明文不要）:
+{"jpy_per_g":{"gold":11500,"silver":115,"palladium":3200,"platinum":4300,"copper":1.12,"aluminum":0.19,"iron":0.05,"stainless":0.08,"lead":0.23,"indium":18,"cobalt":3.5,"lithium":2.5,"tin":1.3,"tantalum":25},"updated":"${today}"}
+nullは不可・必ず数値・JSONのみ返すこと`;
+
+  const prompt2=`本日${today}の金属相場（円/g）を学習データから推定してください。
+JSON形式のみで回答:
+{"jpy_per_g":{"gold":11500,"silver":115,"palladium":3200,"platinum":4300,"copper":1.12,"aluminum":0.19,"iron":0.05,"stainless":0.08,"lead":0.23,"indium":18,"cobalt":3.5,"lithium":2.5,"tin":1.3,"tantalum":25},"updated":"${today}"}
+JSONのみ返すこと`;
+
+  // 1st: Haiku＋ウェブ検索（約1〜2円）
+  try{
+    const t1=await callAPI([{role:"user",content:prompt1}],true,'haiku',true);
+    const p=parseJSON(t1);
+    if(p.jpy_per_g){
+      Object.assign(metalPrices,p.jpy_per_g);
+      localStorage.setItem('umk_prices',JSON.stringify({date:today,prices:{...metalPrices}}));
+      showPriceBadge(today,'取得済（当日）');
+      for(const[k,v]of Object.entries(fb)){if(!metalPrices[k])metalPrices[k]=v;}
+      return;
+    }
+  }catch(e){ console.warn('1st失敗:',e.message); }
+
+  // 2nd: Haiku＋検索なし・学習データ概算（約0.2円）
+  try{
+    const t2=await callAPI([{role:"user",content:prompt2}],false,'haiku');
+    const p=parseJSON(t2);
+    if(p.jpy_per_g){
+      Object.assign(metalPrices,p.jpy_per_g);
+      localStorage.setItem('umk_prices',JSON.stringify({date:today,prices:{...metalPrices}}));
+      showPriceBadge(today,'概算値（学習データ）');
+      for(const[k,v]of Object.entries(fb)){if(!metalPrices[k])metalPrices[k]=v;}
+      return;
+    }
+  }catch(e){ console.warn('2nd失敗:',e.message); }
+
+  // 3rd: ハードコード値（0円）
+  Object.assign(metalPrices,fb);
+  showPriceBadge(today,'固定値使用',false,true);
+  for(const[k,v]of Object.entries(fb)){if(!metalPrices[k])metalPrices[k]=v;}
+}
+
+function showPriceBadge(date,status,loading=false,warn=false){
+  let badge=document.getElementById('priceBadge');
+  if(!badge){
+    badge=document.createElement('div');
+    badge.id='priceBadge';
+    badge.style.cssText='position:fixed;bottom:16px;right:16px;font-size:11px;font-family:monospace;padding:6px 12px;border-radius:20px;z-index:200;transition:all .3s';
+    document.body.appendChild(badge);
+  }
+  if(loading){
+    badge.style.background='#e6f1fb';badge.style.color='#185FA5';badge.style.border='1px solid #b5d4f4';
+    badge.textContent='相場 取得中...';
+  }else if(warn){
+    badge.style.background='#fdf3dc';badge.style.color='#7a5a10';badge.style.border='1px solid #e8d090';
+    badge.textContent=`相場 ${status}`;
+  }else{
+    badge.style.background='#e8f5ee';badge.style.color='#2a7a4b';badge.style.border='1px solid #b8dfc9';
+    badge.textContent=`相場 ${date} ${status}`;
+    setTimeout(()=>{if(badge)badge.style.opacity='0.6';},5000);
+  }
+}
+
+// モード切替
+function switchMode(mode){
+  document.getElementById('imgMode').style.display=mode==='img'?'block':'none';
+  document.getElementById('manualMode').style.display=mode==='manual'?'block':'none';
+  document.getElementById('tab-img').classList.toggle('active',mode==='img');
+  document.getElementById('tab-manual').classList.toggle('active',mode==='manual');
+  document.getElementById('prog').classList.remove('show');
+  document.getElementById('resultArea').classList.remove('show');
+  document.getElementById('shipInput').classList.remove('show');
+}
+
+// テキスト入力モードの査定
+async function runManual(){
+  if(!API_KEY){alert('APIキーを設定してください');return;}
+  const maker=document.getElementById('mMaker').value.trim();
+  const model=document.getElementById('mModel').value.trim();
+  if(!maker&&!model){alert('メーカー名または型番を入力してください');return;}
+
+  const btn=document.getElementById('mGoBtn');
+  btn.disabled=true;
+  document.getElementById('mGoBtnText').textContent='調査中...';
+  document.getElementById('prog').classList.add('show');
+  document.getElementById('resultArea').classList.remove('show');
+  document.getElementById('shipInput').classList.remove('show');
+
+  // 進捗初期化（テキストモード用）
+  setPS('ps1','done',`入力情報: ${maker||'?'} ${model||'?'}`);
+  setPS('ps2','','価格・送料（入力値使用）');
+  setPS('ps3','','');
+  setPS('ps4','','');
+
+  const bidPrice=parseFloat(document.getElementById('mBid').value)||0;
+  const shipping=parseFloat(document.getElementById('mShip').value)||0;
+
+  try{
+    // 価格ステップ
+    const priceMsg=`落札価格: ${bidPrice.toLocaleString()}円 / 送料: ${shipping.toLocaleString()}円（手動入力）`;
+    setPS('ps2','done',priceMsg);
+
+    // 製造年・資源含有量を調査（まずウェブ検索なし、必要なら検索）
+    setPS('ps3','active','製造年・資源含有量を調査中...');
+    const researchPrompt=`以下の電子機器の製造年と資源含有量を推定してください。
+メーカー: ${maker||'不明'} 型番: ${model||'不明'}
+JSON形式のみで回答（説明不要）:
+{"year":1983,"era":"1980年代","era_factor":1.4,"device_type":"パソコン本体","total_weight_g":3200,"composition_g":{"gold":0.28,"silver":1.4,"palladium":0.28,"platinum":0.07,"copper":560,"aluminum":840,"iron":1120,"stainless":70,"lead":0,"indium":0.28,"cobalt":2.8,"lithium":0.7,"tin":7,"tantalum":0.42},"known":true,"notes":"1983年発売"}
+era_factor: 1970年代以前=1.7,1980年代=1.4,1990年代=1.2,2000年代=1.0,2010年代以降=0.8
+knownはこの機種を知っていればtrue、推測ならfalse。不明でも必ず推定値を入れること。`;
+
+    let research;
+    try{
+      const t3a=await callAPI([{role:"user",content:researchPrompt}],false,'haiku');
+      research=parseJSON(t3a);
+      if(!research.known&&maker&&model){
+        setPS('ps3','active','詳細をウェブ検索で補完中...');
+        const t3b=await callAPI([{role:"user",content:researchPrompt+'\nウェブを検索して正確な情報を取得してください。'}],true,'haiku');
+        research=parseJSON(t3b);
+      }
+    }catch(e){
+      const t3c=await callAPI([{role:"user",content:researchPrompt}],true,'haiku');
+      research=parseJSON(t3c);
+    }
+    setPS('ps3','done',`${research.year||research.era}年製 / ${research.device_type||'不明'} / 約${(research.total_weight_g||0).toLocaleString()}g`);
+
+    // 査定計算
+    setPS('ps4','active','相場で査定額を計算中...');
+    const grand=calcGrand(research.composition_g||{});
+    setPS('ps4','done',`素材査定額: ${grand.toLocaleString()}円`);
+
+    const prod={maker,model,product_name:`${maker} ${model}`,device_type:research.device_type||'不明',confidence:'high'};
+    const thr=parseInt(document.getElementById('mThr').value)||THR_DEFAULT;
+    lastResult={prod,research,bidPrice,shipping,thr};
+    showResult(prod,research,bidPrice,shipping,grand,thr);
+
+    // 査定完了後に入力欄をクリア
+    document.getElementById('mMaker').value='';
+    document.getElementById('mModel').value='';
+    document.getElementById('mBid').value='0';
+    document.getElementById('mShip').value='0';
+
+  }catch(e){
+    ['ps3','ps4'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el.classList.contains('active'))setPS(id,'err','エラー: '+e.message);
+    });
+    console.error(e);
+  }
+
+  btn.disabled=false;
+  document.getElementById('mGoBtnText').textContent='製造年・資源含有量を調査して査定する';
+}
+
+
+async function runAll(){
+  if(!API_KEY){alert('APIキーを設定してください');return;}
+  if(!imgData[1].b64){alert('商品の画像をアップロードしてください');return;}
+
+  const btn=document.getElementById('goBtn');
+  btn.disabled=true;
+  document.getElementById('goBtnText').textContent='解析中...';
+  document.getElementById('prog').classList.add('show');
+  document.getElementById('resultArea').classList.remove('show');
+  document.getElementById('shipInput').classList.remove('show');
+  ['ps1','ps2','ps3','ps4'].forEach(id=>setPS(id,'',''));
+
+  try{
+    // STEP1+2: 商品画像・価格画像を1回のAPIで同時解析（Haiku使用）
+    setPS('ps1','active','メーカー・型番・価格を認識中...');
+    const contentArr=[
+      {type:"image",source:{type:"base64",media_type:imgData[1].type,data:imgData[1].b64}},
+    ];
+    // 商品画像②があれば追加
+    if(imgData['1b'].b64){
+      contentArr.push({type:"image",source:{type:"base64",media_type:imgData['1b'].type,data:imgData['1b'].b64}});
+    }
+    if(imgData[2].b64){
+      contentArr.push({type:"image",source:{type:"base64",media_type:imgData[2].type,data:imgData[2].b64}});
+    }
+    const has1b=imgData['1b'].b64, has2=imgData[2].b64;
+    let imgDesc='1枚目';
+    if(has1b&&has2) imgDesc='1枚目と2枚目が商品画像（外観・ラベル）、3枚目が価格・送料画像';
+    else if(has1b) imgDesc='1枚目と2枚目が商品画像（外観・ラベル）';
+    else if(has2) imgDesc='1枚目が商品画像、2枚目が価格・送料画像';
+    const combinedPrompt=`${imgDesc}です。商品画像からメーカー・型番・機器種類を、価格画像（あれば）から価格・送料を読み取ってください。
+JSON形式のみで回答（説明不要）:
+{"maker":"NEC","model":"PC-8801mkII","device_type":"パソコン本体","confidence":"high","price":2500,"shipping":800,"shipping_free":false,"price_found":${has2?'true':'false'},"shipping_found":${has2?'true':'false'}}
+device_typeは「スマートフォン」「パソコン本体」「ビデオデッキ」「オーディオ機器」「デジカメ/カメラ」「ゲーム機」「固定電話」「CRTモニター」「プリンター」「その他」のいずれか。読み取れない項目はnull。`;
+    contentArr.push({type:"text",text:combinedPrompt});
+    const t1=await callAPI([{role:"user",content:contentArr}],false,'haiku');
+    const combined=parseJSON(t1);
+    const prod={maker:combined.maker,model:combined.model,device_type:combined.device_type,confidence:combined.confidence};
+    setPS('ps1','done',`認識完了: ${prod.maker||'?'} ${prod.model||'?'}`);
+
+    let bidPrice=null,shipping=null;
+    if(combined.price_found&&combined.price!==null){bidPrice=combined.price;}
+    if(combined.shipping_free){shipping=0;}
+    else if(combined.shipping_found&&combined.shipping!==null){shipping=combined.shipping;}
+    const priceMsg=imgData[2].b64
+      ? `${bidPrice!==null?`価格: ${bidPrice.toLocaleString()}円`:'価格: 取得不可'} / ${shipping!==null?`送料: ${shipping===0?'無料':shipping.toLocaleString()+'円'}`:'送料: 取得不可'}`
+      : '価格画像なし（スキップ）';
+    setPS('ps2',imgData[2].b64?(bidPrice!==null?'done':'err'):'',priceMsg);
+
+    // STEP3: 製造年・資源含有量を調査（Gemini画像があれば優先活用）
+    setPS('ps3','active','製造年・資源含有量を調査中...');
+
+    // Gemini画像がある場合はまずGeminiの査定内容を読み取る
+    let geminiInfo='';
+    if(imgData[3].b64){
+      setPS('ps3','active','Gemini査定結果を読み取り中...');
+      try{
+        const geminiContent=[
+          {type:"image",source:{type:"base64",media_type:imgData[3].type,data:imgData[3].b64}},
+          {type:"text",text:`このGeminiのAI査定スクリーンショットから以下の情報を読み取ってください。JSON形式のみで回答（説明不要）:{"device_type":"ビデオデッキ","maker":"Sony","model":"不明","year":1985,"total_weight_g":4000,"scrap_value_jpy":3000,"composition_notes":"銅約300g、アルミ約200g含有と推定。金メッキあり","confidence":"medium"}読み取れない項目はnull。scrap_value_jpyはGeminiが提示したスクラップ価値（円）。`}
+        ];
+        const tg=await callAPI([{role:"user",content:geminiContent}],false,'haiku');
+        const gData=parseJSON(tg);
+        geminiInfo='\n\n【Gemini AI査定の参考情報】\n機器種類: '+(gData.device_type||'不明')+'\nGemini推定スクラップ価値: '+(gData.scrap_value_jpy?gData.scrap_value_jpy.toLocaleString()+'円':'不明')+'\n含有量メモ: '+(gData.composition_notes||'なし')+'\n推定重量: '+(gData.total_weight_g?gData.total_weight_g+'g':'不明')+'\n\nこのGemini情報を参考にしつつ、より正確な資源含有量を推定してください。';
+        setPS('ps3','active','Gemini査定を参照して資源含有量を補正中...');
+      }catch(e){
+        console.warn('Gemini画像読み取り失敗',e);
+        setPS('ps3','active','製造年・資源含有量を調査中...');
+      }
+    }
+
+    const researchBase=`以下の電子機器の製造年と資源含有量を推定してください。
+メーカー: ${prod.maker||'不明'} 型番: ${prod.model||'不明'} 機器種類: ${prod.device_type||'不明'}${geminiInfo}
+JSON形式のみで回答（説明不要）:
+{"year":1983,"era":"1980年代","era_factor":1.4,"device_type":"パソコン本体","total_weight_g":3200,"composition_g":{"gold":0.28,"silver":1.4,"palladium":0.28,"platinum":0.07,"copper":560,"aluminum":840,"iron":1120,"stainless":70,"lead":0,"indium":0.28,"cobalt":2.8,"lithium":0.7,"tin":7,"tantalum":0.42},"known":true,"notes":"1983年発売"}
+era_factor: 1970年代以前=1.7,1980年代=1.4,1990年代=1.2,2000年代=1.0,2010年代以降=0.8
+knownはこの機種を知っていればtrue、推測ならfalse。不明でも必ず推定値を入れること。`;
+
+    // まずウェブ検索なし（Haiku）で試みる
+    let research;
+    try{
+      const t3a=await callAPI([{role:"user",content:researchBase}],false,'haiku');
+      research=parseJSON(t3a);
+      // 信頼度が低い場合はウェブ検索で補完
+      if(!research.known&&prod.maker&&prod.model){
+        setPS('ps3','active','詳細をウェブ検索で補完中...');
+        const t3b=await callAPI([{role:"user",content:researchBase+'\nウェブを検索して正確な情報を取得してください。'}],true,'haiku');
+        research=parseJSON(t3b);
+      }
+    }catch(e){
+      const t3c=await callAPI([{role:"user",content:researchBase}],true,'haiku');
+      research=parseJSON(t3c);
+    }
+    const geminiLabel=imgData[3].b64?' / Gemini参照':'';
+    setPS('ps3','done',`${research.year||research.era}年製 / ${research.device_type||prod.device_type||'不明'} / 約${(research.total_weight_g||0).toLocaleString()}g${geminiLabel}`);
+
+    // STEP4: 査定計算
+    setPS('ps4','active','相場で査定額を計算中...');
+    lastResult={prod,research,bidPrice,shipping,thr:THR_DEFAULT};
+    const grand=calcGrand(research.composition_g||{});
+    setPS('ps4','done',`素材査定額: ${grand.toLocaleString()}円`);
+
+    // 結果表示
+    showResult(prod,research,bidPrice,shipping,grand,THR_DEFAULT);
+
+    // 送料未取得の場合
+    if(bidPrice!==null&&shipping===null){
+      document.getElementById('shipInput').classList.add('show');
+    }
+
+    // 査定完了後に画像をクリア（次の査定をすぐ始められるように）
+    clearImg(1);clearImg('1b');clearImg(2);clearImg(3);
+
+  }catch(e){
+    ['ps1','ps2','ps3','ps4'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el.classList.contains('active'))setPS(id,'err','エラー: '+e.message);
+    });
+    console.error(e);
+  }
+
+  btn.disabled=false;
+  document.getElementById('goBtnText').textContent='画像を解析して査定する';
+  document.getElementById('goBtnIcon').textContent='🔍';
+}
+
+function calcGrand(comp){
+  let g=0;
+  for(const[k,v]of Object.entries(comp)){
+    if(v&&metalPrices[k])g+=v*metalPrices[k];
+  }
+  return Math.round(g);
+}
+
+function showResult(prod,research,bidPrice,shipping,grand,thr){
+  if(grand===undefined)grand=calcGrand(research.composition_g||{});
+  if(thr===undefined)thr=THR_DEFAULT;
+  const comp=research.composition_g||{};
+  const MG={
+    precious:{label:"貴金属",grp:"gp",color:"#6b5dd3",keys:["gold","silver","palladium","platinum"],names:{gold:"金",silver:"銀",palladium:"パラジウム",platinum:"白金"}},
+    scrap:{label:"スクラップ金属",grp:"gs",color:"#1a7a60",keys:["copper","aluminum","iron","stainless","lead"],names:{copper:"銅",aluminum:"アルミ",iron:"鉄",stainless:"ステンレス",lead:"鉛"}},
+    rare:{label:"レアメタル",grp:"gr",color:"#9a6c10",keys:["indium","cobalt","lithium","tin","tantalum"],names:{indium:"インジウム",cobalt:"コバルト",lithium:"リチウム",tin:"錫（スズ）",tantalum:"タンタル"}}
+  };
+
+  // 査定条件サマリー
+  const infoItems=[
+    {label:"商品",val:`${prod.maker||'?'} ${prod.model||'?'}`},
+    {label:"製造年",val:`${research.year||research.era||'不明'}`},
+    {label:"機器種類",val:prod.device_type||'不明'},
+    {label:"推定重量",val:`約${(research.total_weight_g||0).toLocaleString()}g`},
+  ];
+  document.getElementById('infoGrid').innerHTML=infoItems.map(i=>`<div class="info-card"><div class="info-label">${i.label}</div><div class="info-val">${i.val}</div></div>`).join('');
+
+  const totalCost=bidPrice!==null&&shipping!==null?Math.round(bidPrice+shipping):null;
+  const thrAmt=Math.floor(grand*thr/100/100)*100;
+  const ratio=totalCost?Math.round(totalCost/grand*100):null;
+  const isOk=totalCost!==null&&totalCost<=thrAmt;
+
+  document.getElementById('rAssess').textContent=grand.toLocaleString();
+  document.getElementById('rTotal').textContent=totalCost!==null?totalCost.toLocaleString():'—';
+  document.getElementById('rThr').textContent=thrAmt.toLocaleString();
+  // しきい値ラベルを動的更新
+  document.querySelector('#rThr').closest('.rcard').querySelector('.rlabel').textContent=`しきい値金額（${thr}%）`;
+
+  const rEl=document.getElementById('rRatio');
+  rEl.textContent=ratio!==null?ratio:'—';
+  rEl.className='rval'+(ratio!==null?(isOk?' ok':' ng'):'');
+
+  const v=document.getElementById('verdict');
+  if(totalCost===null){
+    v.className='verdict neutral';
+    v.textContent=shipping===null?'送料を入力して再計算してください':'落札価格が取得できませんでした';
+  }else if(isOk){
+    v.className='verdict buy';
+    v.textContent=`✓ お得！ 落札総額（${totalCost.toLocaleString()}円）がしきい値金額（${thrAmt.toLocaleString()}円）以下です`;
+  }else{
+    v.className='verdict pass';
+    v.textContent=`✗ スルー推奨。落札総額（${totalCost.toLocaleString()}円）がしきい値金額（${thrAmt.toLocaleString()}円）を超えています`;
+  }
+
+  // 構成比バー
+  const groupTotals={};
+  for(const[gk,g]of Object.entries(MG)){
+    groupTotals[gk]=g.keys.reduce((s,k)=>{
+      const v=comp[k];
+      return s+(v&&metalPrices[k]?Math.round(v*metalPrices[k]):0);
+    },0);
+  }
+  const bw=document.getElementById('barWrap');
+  if(grand>0){
+    const segs=Object.entries(groupTotals).filter(([,v])=>v>0).map(([gk,v])=>`<div class="bseg" style="width:${(v/grand*100).toFixed(1)}%;background:${MG[gk].color}"></div>`).join('');
+    const leg=Object.entries(groupTotals).filter(([,v])=>v>0).map(([gk,v])=>`<div class="bleg-item"><div class="bdot" style="background:${MG[gk].color}"></div>${MG[gk].label} ${Math.round(v/grand*100)}%（${v.toLocaleString()}円）</div>`).join('');
+    bw.innerHTML=`<div class="blabel">素材カテゴリ別構成比</div><div class="btrack">${segs}</div><div class="bleg">${leg}</div>`;
+  }
+
+  // 内訳
+  let bdHtml='';
+  for(const[gk,g]of Object.entries(MG)){
+    let rows='';
+    for(const k of g.keys){
+      const grams=comp[k];
+      if(!grams||grams<=0)continue;
+      const price=metalPrices[k];
+      if(price){
+        const val=Math.round(grams*price);
+        rows+=`<div class="bdrow"><span>${g.names[k]}</span><span>${grams.toFixed(3)} g → ${val.toLocaleString()} 円</span></div>`;
+      }else{
+        rows+=`<div class="bdrow nop"><span>${g.names[k]}</span><span>${grams.toFixed(3)} g（含有量見込み）<span class="npbadge">相場未取得</span></span></div>`;
+      }
+    }
+    if(rows)bdHtml+=`<div class="bgroup"><span class="glabel ${g.grp}">${g.label}</span>${rows}</div>`;
+  }
+  document.getElementById('breakdown').innerHTML=bdHtml;
+  document.getElementById('bdTotal').textContent=grand.toLocaleString()+' 円';
+
+  if(research.notes){
+    document.getElementById('bdNote').textContent=`📋 ${research.notes}`;
+    document.getElementById('bdNote').style.display='block';
+  }
+
+  document.getElementById('resultArea').classList.add('show');
+  document.getElementById('resultArea').scrollIntoView({behavior:'smooth',block:'start'});
+
+  // 履歴に自動保存
+  const row=buildExportRow();
+  if(row)saveToHistory(row);
+}
+
+function recalculate(){
+  if(!lastResult)return;
+  const ship=parseFloat(document.getElementById('shipManual').value)||0;
+  lastResult.shipping=ship;
+  const grand=calcGrand(lastResult.research.composition_g||{});
+  showResult(lastResult.prod,lastResult.research,lastResult.bidPrice,ship,grand,lastResult.thr||THR_DEFAULT);
+  document.getElementById('shipInput').classList.remove('show');
+}
+
+function buildExportRow(){
+  if(!lastResult)return null;
+  const {prod,research,bidPrice,shipping,thr}=lastResult;
+  const grand=calcGrand(research.composition_g||{});
+  const thrV=thr||THR_DEFAULT;
+  const totalCost=bidPrice!==null&&shipping!==null?Math.round(bidPrice+shipping):null;
+  const thrAmt=Math.floor(grand*thrV/100/100)*100;
+  const ratio=totalCost?Math.round(totalCost/grand*100):null;
+  const isOk=totalCost!==null&&totalCost<=thrAmt;
+  const now=new Date();
+  const dateStr=now.toLocaleDateString('ja-JP');
+  const timeStr=now.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+  const comp=research.composition_g||{};
+  return {
+    日付:dateStr, 時刻:timeStr,
+    メーカー:prod.maker||'不明', 型番:prod.model||'不明',
+    機器種類:research.device_type||prod.device_type||'不明',
+    製造年:research.year||research.era||'不明',
+    推定重量g:research.total_weight_g||'',
+    素材査定額:grand,
+    落札価格:bidPrice!==null?bidPrice:'',
+    送料:shipping!==null?shipping:'',
+    落札総額:totalCost!==null?totalCost:'',
+    判定:isOk?'お得':'スルー',
+    比率percent:ratio!==null?ratio:'',
+    しきい値percent:thrV,
+    しきい値金額:thrAmt,
+    金g:comp.gold||0, 銀g:comp.silver||0, パラジウムg:comp.palladium||0, 白金g:comp.platinum||0,
+    銅g:comp.copper||0, アルミg:comp.aluminum||0, 鉄g:comp.iron||0,
+    備考:research.notes||''
+  };
+}
+
+function exportCSV(){
+  const row=buildExportRow();
+  if(!row){alert('査定結果がありません');return;}
+  const headers=Object.keys(row);
+  const values=headers.map(h=>{
+    const v=row[h];
+    const s=String(v);
+    return s.includes(',')||s.includes('"')||s.includes('\n')?`"${s.replace(/"/g,'""')}"`:'s';
+  });
+  // BOM付きUTF-8でExcel文字化け防止
+  const bom='\uFEFF';
+  const csv=bom+headers.join(',')+'\n'+Object.values(row).map(v=>{
+    const s=String(v);
+    return s.includes(',')||s.includes('"')||s.includes('\n')?`"${s.replace(/"/g,'""')}"`:`${s}`;
+  }).join(',');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  const prod=lastResult.prod;
+  const dateStr=new Date().toLocaleDateString('ja-JP').replace(/\//g,'');
+  a.href=url;a.download=`査定_${prod.maker||'不明'}_${prod.model||'不明'}_${dateStr}.csv`;
+  a.click();URL.revokeObjectURL(url);
+}
+
+function copyToClipboard(){
+  const row=buildExportRow();
+  if(!row){alert('査定結果がありません');return;}
+  const headers=Object.keys(row).join('\t');
+  const values=Object.values(row).join('\t');
+  const text=headers+'\n'+values;
+  navigator.clipboard.writeText(text).then(()=>{
+    const btn=document.getElementById('copyBtn');
+    btn.textContent='✓ コピーしました';btn.classList.add('copied');
+    setTimeout(()=>{btn.textContent='📋 クリップボードにコピー';btn.classList.remove('copied');},2500);
+  }).catch(()=>{
+    const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+    const btn=document.getElementById('copyBtn');
+    btn.textContent='✓ コピーしました';btn.classList.add('copied');
+    setTimeout(()=>{btn.textContent='📋 クリップボードにコピー';btn.classList.remove('copied');},2500);
+  });
+}
+
+
+// ─── 履歴管理 ───────────────────────────────────
+const HIST_KEY='umk_history';
+const GAS_URL='https://script.google.com/macros/s/AKfycbzQLvNFvobrFi8TUO2MDlQLpdZBX4UGzM2_wARZuI7LJh-1UO__2j3mg-mHs88vgcn7/exec';
+const SHEET_ID='1AaoPEVDOvBE9OIdGBy2O4x5zxmjfx-KbiPB0b5-9g58';
+
+async function sendToSheet(row){
+  if(!GAS_URL||!SHEET_ID)return;
+  try{
+    const headers=Object.keys(row);
+    const values=headers.map(h=>String(row[h]??''));
+    const params=new URLSearchParams({
+      sheetId:SHEET_ID,
+      headers:JSON.stringify(headers),
+      values:JSON.stringify(values)
+    });
+    const url=`${GAS_URL}?${params.toString()}`;
+    // XHRでno-cors相当のリクエスト
+    const xhr=new XMLHttpRequest();
+    xhr.open('GET',url,true);
+    xhr.send();
+    console.log('スプレッドシートに送信しました',url.length,'文字');
+  }catch(e){
+    console.warn('スプレッドシート追記失敗:',e.message);
+  }
+}
+
+function loadHistory(){
+  try{return JSON.parse(localStorage.getItem(HIST_KEY)||'[]');}
+  catch(e){return [];}
+}
+
+function saveToHistory(row){
+  const hist=loadHistory();
+  hist.unshift(row);
+  if(hist.length>200)hist.splice(200);
+  localStorage.setItem(HIST_KEY,JSON.stringify(hist));
+  renderHistory();
+  // Googleスプレッドシートにも追記
+  sendToSheet(row);
+}
+
+function renderHistory(){
+  const hist=loadHistory();
+  const sec=document.getElementById('histSec');
+  const body=document.getElementById('histBody');
+  const count=document.getElementById('histCount');
+  if(hist.length===0){sec.classList.remove('show');return;}
+  sec.classList.add('show');
+  count.textContent=hist.length+'件';
+  body.innerHTML=hist.map((r,i)=>`
+    <tr>
+      <td>${r.日付||''}</td>
+      <td>${r.時刻||''}</td>
+      <td>${r.メーカー||''}</td>
+      <td>${r.型番||''}</td>
+      <td style="text-align:right">${r.素材査定額?Number(r.素材査定額).toLocaleString()+'円':''}</td>
+      <td style="text-align:right">${r.落札総額!==''&&r.落札総額!==undefined?Number(r.落札総額).toLocaleString()+'円':'—'}</td>
+      <td class="${r.判定==='お得'?'verdict-ok':'verdict-ng'}">${r.判定||''}</td>
+    </tr>`).join('');
+}
+
+function downloadAllCSV(){
+  const hist=loadHistory();
+  if(hist.length===0){alert('履歴がありません');return;}
+  const headers=Object.keys(hist[0]);
+  const bom='\uFEFF';
+  const csv=bom+headers.join(',')+'\n'+hist.map(r=>
+    headers.map(h=>{
+      const v=String(r[h]??'');
+      return v.includes(',')||v.includes('"')||v.includes('\n')?`"${v.replace(/"/g,'""')}"`:`${v}`;
+    }).join(',')
+  ).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  const date=new Date().toLocaleDateString('ja-JP').replace(/\//g,'');
+  a.href=url;a.download=`都市鉱山査定履歴_${date}.csv`;
+  a.click();URL.revokeObjectURL(url);
+}
+
+function clearHistory(){
+  if(!confirm(`履歴を全件削除しますか？\nこの操作は元に戻せません。`))return;
+  localStorage.removeItem(HIST_KEY);
+  renderHistory();
+}
+
+function resetAll(){
+  // 画像クリア
+  clearImg(1);clearImg('1b');clearImg(2);clearImg(3);
+  activeZone=1;
+  // テキストモードの入力欄をリセット
+  document.getElementById('mMaker').value='';
+  document.getElementById('mModel').value='';
+  document.getElementById('mBid').value='0';
+  document.getElementById('mShip').value='0';
+  document.getElementById('mThr').value=THR_DEFAULT;
+  // 結果・進捗を非表示
+  document.getElementById('resultArea').classList.remove('show');
+  document.getElementById('shipInput').classList.remove('show');
+  document.getElementById('prog').classList.remove('show');
+  lastResult=null;
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+if(API_KEY)fetchMetalPrices();
+renderHistory();
+</script>
+</body>
+</html>
